@@ -1,0 +1,6 @@
+[package]
+name = "gitignore_to_p4ignore"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
