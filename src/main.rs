@@ -37,16 +37,23 @@ fn convert_gitignore_line(line: &str) -> Vec<String> {
 
     for m in matches
     {
+        println!("Match {}", m.as_str());
+
         let char_class_str = m.as_str();
 
         let graphemes = UnicodeSegmentation::graphemes(char_class_str, true).collect::<Vec<&str>>();
 
-        for grapheme in graphemes 
+        for grapheme in graphemes[1..graphemes.len()-1].iter()
         {
-            let mut line_without_char_class=  input_line.to_string();
-            line_without_char_class.replace_range(m.range(), grapheme);
+            println!("grapheme {}", grapheme);
 
-            output_lines.push(line_without_char_class);
+            let mut line_with_unrolled_char_class=  input_line.to_string();
+            line_with_unrolled_char_class.replace_range(m.range(), grapheme);
+
+
+            println!("out_line {}", line_with_unrolled_char_class.as_str());
+
+            output_lines.push(line_with_unrolled_char_class);
         }
     }
 
@@ -75,6 +82,11 @@ fn convert_gitignore_line(line: &str) -> Vec<String> {
 }
 
 fn convert_gitignore_to_p4ignore(input_path: &Path, output_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+
+    println!("Converting {} -> {}", 
+             input_path.display(), 
+             output_path.display());
+
     // Open input .gitignore file
     let input_file = File::open(input_path)?;
     let input_reader = BufReader::new(input_file);
