@@ -1,0 +1,45 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'gitignore_to_p4ignore'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=gitignore_to_p4ignore",
+                    "--package=gitignore_to_p4ignore"
+                ],
+                "filter": {
+                    "name": "gitignore_to_p4ignore",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'gitignore_to_p4ignore'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=gitignore_to_p4ignore",
+                    "--package=gitignore_to_p4ignore"
+                ],
+                "filter": {
+                    "name": "gitignore_to_p4ignore",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
