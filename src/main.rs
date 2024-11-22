@@ -10,31 +10,18 @@ use regex::{Match, Regex};
 
 use unicode_segmentation::UnicodeSegmentation;
 
-
-fn convert_gitignore_line(line: &str) -> Vec<String> {
-
-    // Remove any leading/trailing whitespace
-    let input_line = line.trim();
-
-    // Skip empty lines and comments
-    if input_line.is_empty() {
-        return Vec::new();
-    }
-
-    // don't change comment lines
-    if input_line.starts_with("#")
-    {
-        return vec![input_line.to_string()];
-    }
-
+// Expand character classes ("or" patterns) into separate lines
+//
+//      /[Aa]ssets/[Ss]treamingAssets/aa.meta
+// ----------------------------------
+//      /Assets/StreamingAssets/aa.meta
+//      /Assets/streamingAssets/aa.meta
+//      /assets/StreamingAssets/aa.meta
+//      /assets/streamingAssets/aa.meta
+//
+fn expand_gitignore_line(input_line: &str) -> Vec<String> {
     let mut output_lines : Vec<String> = vec![];
 
-     // Expand character classes ("or" patterns) into separate lines
-    //
-    //     /[Ll]ibrary/
-    // ----------------------------------
-    //     /Library/
-    //     /library/
     let char_class_regex = Regex::new(r"(\[(.*?)\])+?").unwrap();
 
     let matches = char_class_regex.find_iter(input_line).collect::<Vec<Match>>();
@@ -58,119 +45,31 @@ fn convert_gitignore_line(line: &str) -> Vec<String> {
     }
 
 
-    //let num_options = match_chars.iter().fold(1, |acc, cs| acc * cs.len());
-    //let options = match_chars.iter().map(|x| (x.0, x.1)).multi_cartesian_product();
-    //let options = match_chars.iter().map(|x| x.into_iter()).multi_cartesian_product();
-
-    //let mut queue = vec![];
-
-    //if (!match_chars.is_empty())
-    //{
-    //    queue = match_chars.first().unwrap().to_vec();
-    //}
-
-    // [[l, L], [n, N, m, M], [p, P]]
-    // -->
-    // [l, n, p]
-    // [l, n, P]
-    // [l, N, p]
-    // [l, N, P]
-    // [l, m, p]
-    // [l, m, P]
-    // [l, M, p]
-    // [l, M, P]
-    // [L, n, p]
-    // [L, n, P]
-    // [L, N, p]
-    // [L, N, P]
-    // [L, m, p]
-    // [L, m, P]
-    // [L, M, p]
-    // [L, M, P]
-
-    // for a = l, L
-    //
-    //  for ia = 0..[l, L].num()
-    //  for ia = 0..dims[dim].num()
-    //
-    // for b = n, N, m, M
-    // for c = p, P
-
-
-    //let mut dim_idxs : Vec<usize> = vec![0; dim_strides.len()];
-
-    // fn is_iteration_complete(idxs: &Vec<usize>, strides: &Vec<usize>) -> bool
-    // {
-    //     if idxs.is_empty()
-    //     {
-    //         return true;
-    //     }
-
-    //     return idxs[0] >= strides[0];
-    // }
-
-    // fn step_iteration(idxs: &mut Vec<usize>, strides: &Vec<usize>)
-    // {
-    //     // iterate
-    //     for i_dim in (0..idxs.len()).rev()
-    //     {
-    //         // if this is the last dim, always wrap.
-    //         // if this is not the last dimension, and the next dimension wrapped back to zero, carry that increment to this dimension
-    //         let is_last_dimension = i_dim == idxs.len() - 1;
-    //         if is_last_dimension || idxs[i_dim + 1] == 0
-    //         {
-    //             // #hack let 1st dimension overflow so we can detect completion..
-    //             let is_first_dimension = i_dim == 0;
-    //             if is_first_dimension
-    //             {
-    //                 idxs[i_dim] += 1;
-    //             }
-    //             else
-    //             {
-    //                 idxs[i_dim] = (idxs[i_dim] + 1) % strides[i_dim];
-    //             }
-    //         }
-    //     }
-    // }
-
-
     let strides = match_chars.iter().map(|x| x.len()).collect::<Vec<usize>>();
-
     let mut wrap_values = strides.clone();
 
     if !strides.is_empty()
     {
         for i in (0..(strides.len()-1)).rev()
         {
-            wrap_values[i] = strides[i] * strides[i + 1];
+            println!("i: {}, stride[{}]: {}, stride[{}]: {}", i,  i, strides[i], i+1, strides[i+1]);
+            wrap_values[i] = strides[i] * wrap_values[i + 1];
+            println!("i: {}, wrap_values[{}]: {}, wrap_values[{}]: {}", i, i, wrap_values[i], i+1, wrap_values[i+1]);
         }
     }
 
-    fn get_indices_for_iteration(iteration_index: usize, wrap_values: &Vec<usize>) -> Vec<usize>
+    fn get_indices_for_iteration(iteration_index: usize, wrap_values: &Vec<usize>, strides: &Vec<usize>) -> Vec<usize>
     {
         let mut indices = vec![0; wrap_values.len()];
         
         for i_dim in (0..indices.len()).rev()
         {
-            // if this is the last dim, always wrap.
-            // if this is not the last dimension, and the next dimension wrapped back to zero, carry that increment to this dimension
-            let is_last_dimension = i_dim == indices.len() - 1;
-            if is_last_dimension 
-            {
-                indices[i_dim] = iteration_index % wrap_values[i_dim];
-            }
-            else
-            {
-                indices[i_dim] = iteration_index / (wrap_values[i_dim + 1]);
-            }
+            let next_wrap_val = if (i_dim == indices.len() - 1) { 1 } else { wrap_values[i_dim + 1] };
+
+            indices[i_dim] = (iteration_index / next_wrap_val) % strides[i_dim];
         }
 
         return indices;
-
-        // for i in 0..wrap_values.len() {
-            
-        // }
-        // return wrap_values.iter().map(|wrap_val| iteration_index % wrap_val).collect();
     }
 
     let num_iterations = if wrap_values.is_empty() { 0 } else { wrap_values[0] };
@@ -178,7 +77,7 @@ fn convert_gitignore_line(line: &str) -> Vec<String> {
     println!("converting {:?}, num iters: {}, wrap_values: {:?}", match_chars, num_iterations, wrap_values);
 
     for i in 0..num_iterations {
-        let indices =  get_indices_for_iteration(i, &wrap_values);
+        let indices =  get_indices_for_iteration(i, &wrap_values, &strides);
 
         println!("indices: {:?}", indices);
 
@@ -200,86 +99,55 @@ fn convert_gitignore_line(line: &str) -> Vec<String> {
             range_offset += if r.len() > 0 { r.len() - 1 } else { 0 };
 
             unrolled_line.replace_range(r, c);
-
         }
 
-        println!("\tin:  {}\n\tout: {}", input_line, unrolled_line.as_str());
+        output_lines.push(unrolled_line);
     }
 
+    return output_lines;
 
-    // while !is_iteration_complete(&dim_idxs, &dim_strides)
-    // {
-    //     //let curr_char_idxs = &dim_idxs; 
-
-    //     let option = enumerate(&dim_idxs).map(|(i_dim, i_char)| match_chars[i_dim][*i_char]).collect::<Vec<&str>>();
-    //     println!("option {:?}", option.iter().collect::<Vec<&&str>>()); //.map(|c| c.to_string()).collect::<String>());
-
-    //     let mut unrolled_line=  input_line.to_string();
-
-    //     for (i, c) in enumerate(option)
-    //     {
-    //         let r = &match_ranges[i];
-    //         println!("grapheme {}", c);
-
-    //         unrolled_line.replace_range(r.clone(), c);
-
-    //         println!("out_line {}", unrolled_line.as_str());
-    //     }
-
-    //     output_lines.push(unrolled_line);
-
-    //     step_iteration(&mut dim_idxs, &dim_strides);
-    // }
-
-  
+}
 
 
-    // num dims = matches.len()
-    //
-    // for idim in numdims
-    //    for 
-    //
+fn convert_gitignore_line(line: &str) -> Vec<String> {
 
+    // Remove any leading/trailing whitespace
+    let input_line = line.trim();
 
+    // Skip empty lines 
+    if input_line.is_empty() {
+        return vec!["".to_owned()];
+    }
 
+    let mut output_lines = expand_gitignore_line(input_line);
 
-    // for cs in options 
-    // {
-    //     let mut unrolled_line=  input_line.to_string();
+    if output_lines.is_empty() { output_lines = vec![input_line.to_string()] }
 
-    //     for (i, c) in enumerate(cs)
-    //     {
-    //         println!("grapheme {}", c);
+    println!("\tin:  {:?}\n\tout: {:?}", input_line, output_lines);
 
-    //         let r = match_ranges[i%match_ranges.len()].clone();
-
-    //         unrolled_line.replace_range(r, c);
-
-    //         println!("out_line {}", unrolled_line.as_str());
-    //     }
-
-    //     output_lines.push(unrolled_line);
-    // }
-
-
-    // if there is a / before the end of the string, it's relative to the current directory
-    let is_relative_to_ignore_file =  input_line.find('/') < Some(input_line.len() - 1);
-
-    if is_relative_to_ignore_file 
-    {
-        let mut out_line: String; 
-
-        if input_line.starts_with('/')
+    for out_line in &mut output_lines {
+        // exit early for comment lines
+        if out_line.starts_with("#")
         {
-            out_line = input_line.to_string();
-        }
-        else
-        {
-            out_line = "/".to_owned();
-            out_line.push_str(input_line);
+            continue;
         }
 
-        output_lines.push(out_line);
+        // if there is a / before the end of the string, it's relative to the current directory
+        let is_relative_to_ignore_file = match out_line.find('/')
+        {
+            Some(pos) if pos < out_line.len() - 1 => true,
+            _ => false
+        };
+
+        if is_relative_to_ignore_file 
+        {
+            if !out_line.starts_with('/')
+            {
+                let mut out_line_with_slash = "/".to_owned();
+                out_line_with_slash.push_str(out_line);
+                *out_line = out_line_with_slash;
+            }
+        }
     }
 
 
@@ -331,6 +199,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Convert paths
     let input_path = Path::new(&args[1]);
     let output_path = Path::new(&args[2]);
+
 
     // Perform conversion
     convert_gitignore_to_p4ignore(input_path, output_path)?;
