@@ -63,7 +63,7 @@ fn expand_character_classes_to_new_lines(input_line: &str) -> Vec<String> {
         
         for i_dim in (0..indices.len()).rev()
         {
-            let next_dim_wrap_val = if (i_dim == indices.len() - 1) { 1 } else { wrap_values[i_dim + 1] };
+            let next_dim_wrap_val = if i_dim == (indices.len() - 1) { 1 } else { wrap_values[i_dim + 1] };
 
             indices[i_dim] = (iteration_index / next_dim_wrap_val) % strides[i_dim];
         }
