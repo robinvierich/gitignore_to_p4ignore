@@ -4,7 +4,7 @@ use std::io::{BufRead, BufReader, Write, BufWriter};
 use std::path::Path;
 use std::{env, vec};
 
-use itertools::{enumerate, Itertools};
+use itertools::enumerate;
 
 use regex::{Match, Regex};
 
@@ -19,43 +19,43 @@ use unicode_segmentation::UnicodeSegmentation;
 //      /assets/StreamingAssets/aa.meta
 //      /assets/streamingAssets/aa.meta
 //
-fn expand_gitignore_line(input_line: &str) -> Vec<String> {
+fn expand_character_classes_to_new_lines(input_line: &str) -> Vec<String> {
     let mut output_lines : Vec<String> = vec![];
 
     let char_class_regex = Regex::new(r"(\[(.*?)\])+?").unwrap();
 
     let matches = char_class_regex.find_iter(input_line).collect::<Vec<Match>>();
+    if matches.is_empty() {
+       return output_lines; 
+    }
+
+
     let match_ranges = matches.iter().map(|m| m.range()).collect::<Vec<core::ops::Range<usize>>>();
 
-    let mut match_chars: Vec<Vec<&str>> = vec![];
+    let mut match_graphemes: Vec<Vec<&str>> = vec![];
 
     for m in matches.iter()
     {
         println!("Match {}", m.as_str());
 
-        let char_class_str = m.as_str();
-        let graphemes = UnicodeSegmentation::graphemes(char_class_str, true).collect::<Vec<&str>>();
+        let graphemes = UnicodeSegmentation::graphemes(m.as_str(), true).collect::<Vec<&str>>();
 
-        let stripped_graphemes = graphemes[1..graphemes.len()-1].to_vec();
+        let graphemes_excluding_brackets = graphemes[1..graphemes.len()-1].to_vec();
 
-        println!("stripped_graphemes {:?}", stripped_graphemes);
-
-        //match_chars.push((m.range(), graphemes[1..graphemes.len()-1].iter()));
-        match_chars.push(stripped_graphemes);
+        match_graphemes.push(graphemes_excluding_brackets);
     }
 
 
-    let strides = match_chars.iter().map(|x| x.len()).collect::<Vec<usize>>();
-    let mut wrap_values = strides.clone();
+    let strides = match_graphemes.iter().map(|x| x.len()).collect::<Vec<usize>>();
 
-    if !strides.is_empty()
+    let mut wrap_values = strides.clone();
+    for i in (0..(strides.len()-1)).rev()
     {
-        for i in (0..(strides.len()-1)).rev()
-        {
-            println!("i: {}, stride[{}]: {}, stride[{}]: {}", i,  i, strides[i], i+1, strides[i+1]);
-            wrap_values[i] = strides[i] * wrap_values[i + 1];
-            println!("i: {}, wrap_values[{}]: {}, wrap_values[{}]: {}", i, i, wrap_values[i], i+1, wrap_values[i+1]);
-        }
+        println!("i: {}, stride[{}]: {}, stride[{}]: {}", i,  i, strides[i], i+1, strides[i+1]);
+
+        wrap_values[i] = strides[i] * wrap_values[i + 1];
+
+        println!("i: {}, wrap_values[{}]: {}, wrap_values[{}]: {}", i, i, wrap_values[i], i+1, wrap_values[i+1]);
     }
 
     fn get_indices_for_iteration(iteration_index: usize, wrap_values: &Vec<usize>, strides: &Vec<usize>) -> Vec<usize>
@@ -64,41 +64,39 @@ fn expand_gitignore_line(input_line: &str) -> Vec<String> {
         
         for i_dim in (0..indices.len()).rev()
         {
-            let next_wrap_val = if (i_dim == indices.len() - 1) { 1 } else { wrap_values[i_dim + 1] };
+            let next_dim_wrap_val = if (i_dim == indices.len() - 1) { 1 } else { wrap_values[i_dim + 1] };
 
-            indices[i_dim] = (iteration_index / next_wrap_val) % strides[i_dim];
+            indices[i_dim] = (iteration_index / next_dim_wrap_val) % strides[i_dim];
         }
 
         return indices;
     }
 
-    let num_iterations = if wrap_values.is_empty() { 0 } else { wrap_values[0] };
+    let num_iterations = wrap_values[0];
 
-    println!("converting {:?}, num iters: {}, wrap_values: {:?}", match_chars, num_iterations, wrap_values);
+    println!("converting {:?}, num_iterations: {}, wrap_values: {:?}", match_graphemes, num_iterations, wrap_values);
 
     for i in 0..num_iterations {
         let indices =  get_indices_for_iteration(i, &wrap_values, &strides);
 
-        println!("indices: {:?}", indices);
-
-        let char_combo = enumerate(&indices).map(|(i_dim, i_char)| match_chars[i_dim][*i_char]).collect::<Vec<&str>>();
-
-        println!("replacing chars {:?}", char_combo.iter().collect::<Vec<&&str>>()); //.map(|c| c.to_string()).collect::<String>());
+        let grapheme_combo = enumerate(&indices).map(|(i_dim, i_char)| match_graphemes[i_dim][*i_char]).collect::<Vec<&str>>();
+        println!("using grapheme combo {:?}", grapheme_combo.iter()); 
 
         let mut unrolled_line=  input_line.to_string();
 
-        let mut range_offset : usize = 0;
+        let mut num_characters_removed : usize = 0;
 
-        for (i, c) in enumerate(char_combo)
+        for (i, grapheme) in enumerate(grapheme_combo)
         {
             let r = std::ops::Range {
-                start: &match_ranges[i].start - range_offset, 
-                end: &match_ranges[i].end - range_offset
+                start: &match_ranges[i].start - num_characters_removed, 
+                end: &match_ranges[i].end - num_characters_removed
             };
 
-            range_offset += if r.len() > 0 { r.len() - 1 } else { 0 };
+            // r is guaranteed to be larger than grapheme because it includes the "[]" characters
+            num_characters_removed += r.len() - grapheme.len(); 
 
-            unrolled_line.replace_range(r, c);
+            unrolled_line.replace_range(r, grapheme);
         }
 
         output_lines.push(unrolled_line);
@@ -119,7 +117,7 @@ fn convert_gitignore_line(line: &str) -> Vec<String> {
         return vec!["".to_owned()];
     }
 
-    let mut output_lines = expand_gitignore_line(input_line);
+    let mut output_lines = expand_character_classes_to_new_lines(input_line);
 
     if output_lines.is_empty() { output_lines = vec![input_line.to_string()] }
 
